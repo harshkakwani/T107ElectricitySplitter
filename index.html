@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monthly Electricity Bill Splitter</title>
+    <style>
+        :root { --primary: #2563eb; --bg: #f8fafc; --card: #ffffff; --text: #0f172a; --border: #e2e8f0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); padding: 15px; margin: 0; }
+        .container { max-width: 800px; margin: auto; background: var(--card); padding: 20px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+        h1 { text-align: center; margin-bottom: 5px; font-size: 1.6rem; }
+        p.sub { text-align: center; color: #64748b; margin-top: 0; margin-bottom: 20px; font-size: 0.9rem; }
+        
+        .section { background: #f1f5f9; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
+        .section h3 { margin-top: 0; margin-bottom: 12px; font-size: 1.1rem; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        label { font-size: 0.85rem; font-weight: 600; color: #475569; display: block; margin-bottom: 4px; }
+        input[type="number"], input[type="text"] { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; box-sizing: border-box; font-size: 0.95rem; }
+        
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid var(--border); font-size: 0.9rem; }
+        th { background-color: #e2e8f0; font-weight: 600; color: #334155; }
+        
+        .owes { color: #dc2626; font-weight: 600; }
+        .gets { color: #16a34a; font-weight: 600; }
+        
+        .btn { background: var(--primary); color: white; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 0.85rem; }
+        
+        .settlement-card { background: #eff6ff; border-left: 4px solid var(--primary); padding: 15px; border-radius: 4px; margin-top: 15px; }
+        .settlement-card h3 { margin-top: 0; margin-bottom: 8px; color: #1e40af; }
+        ul { margin: 0; padding-left: 20px; }
+        li { margin-bottom: 6px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>⚡ Monthly Electricity Bill Splitter</h1>
+        <p class="sub">Exact daily prorated bill split based on calendar presence</p>
+
+        <!-- Bill Config -->
+        <div class="section">
+            <h3>1. Bill & Month Configuration</h3>
+            <div class="grid-2">
+                <div>
+                    <label>Total Bill Amount (₹)</label>
+                    <input type="number" id="totalBill" value="13000" oninput="calculate()">
+                </div>
+                <div>
+                    <label>Days in Month</label>
+                    <input type="number" id="totalDays" value="31" min="1" max="31" readonly>
+                </div>
+            </div>
+        </div>
+
+        <!-- Roommates Input -->
+        <div class="section">
+            <h3>2. Roommate Payments</h3>
+            <div style="overflow-x: auto;">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>Amount Paid (₹)</th>
+                            <th>Days Present</th>
+                        </tr>
+                    </thead>
+                    <tbody id="personInputs"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Calculated Results -->
+        <div style="overflow-x: auto;">
+            <h3>3. Individual Summary</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Person</th>
+                        <th>Days Present</th>
+                        <th>Calculated Share</th>
+                        <th>Paid</th>
+                        <th>Net Balance</th>
+                    </tr>
+                </thead>
+                <tbody id="summaryTable"></tbody>
+            </table>
+        </div>
+
+        <!-- Transfers Box -->
+        <div class="settlement-card">
+            <h3>💸 Final Settlement (Who Pays Whom)</h3>
+            <div id="transfersList"></div>
+        </div>
+    </div>
+
+    <script>
+        let people = [
+            { name: "Adarsh", paid: 6000 },
+            { name: "Kumwar", paid: 3000 },
+            { name: "Aniket", paid: 3000 },
+            { name: "Harsh", paid: 1000 }
+        ];
+
+        // Create 31 days presence matrix
+        const totalDays = 31;
+        const presence = Array.from({ length: totalDays }, () => ({
+            "Adarsh": true,
+            "Kumwar": true,
+            "Aniket": true,
+            "Harsh": true
+        }));
+
+        function markAbsent(p, start, end) {
+            for (let d = start - 1; d < end; d++) presence[d][p] = false;
+        }
+
+        // Apply July absences
+        markAbsent("Harsh", 2, 4);
+        markAbsent("Harsh", 17, 20);
+        markAbsent("Adarsh", 14, 14);
+        markAbsent("Harsh", 25, 27);
+        markAbsent("Aniket", 25, 27);
+        markAbsent("Kumwar", 19, 31);
+
+        function renderInputs() {
+            const container = document.getElementById('personInputs');
+            container.innerHTML = '';
+
+            people.forEach((p, idx) => {
+                let daysCount = presence.filter(day => day[p.name]).length;
+                container.innerHTML += `
+                    <tr>
+                        <td><strong>${p.name}</strong></td>
+                        <td>
+                            <input type="number" value="${p.paid}" oninput="updatePaid(${idx}, parseFloat(this.value)||0)">
+                        </td>
+                        <td>${daysCount} / 31 days</td>
+                    </tr>
+                `;
+            });
+        }
+
+        function updatePaid(index, val) {
+            people[index].paid = val;
+            calculate();
+        }
+
+        function calculate() {
+            const totalBill = parseFloat(document.getElementById('totalBill').value) || 0;
+            const dailyCost = totalBill / totalDays;
+
+            let shares = { "Adarsh": 0, "Kumwar": 0, "Aniket": 0, "Harsh": 0 };
+            let daysPresent = { "Adarsh": 0, "Kumwar": 0, "Aniket": 0, "Harsh": 0 };
+
+            // Day by day calculation
+            for (let d = 0; d < totalDays; d++) {
+                let activePeople = people.filter(p => presence[d][p.name]);
+                let count = activePeople.length;
+
+                if (count > 0) {
+                    let costPerPerson = dailyCost / count;
+                    activePeople.forEach(p => {
+                        shares[p.name] += costPerPerson;
+                        daysPresent[p.name]++;
+                    });
+                }
+            }
+
+            let summaryHTML = '';
+            let balances = [];
+
+            people.forEach(p => {
+                let share = shares[p.name] || 0;
+                let net = share - p.paid;
+                balances.push({ name: p.name, net: net });
+
+                let cls = net > 0 ? 'owes' : 'gets';
+                let status = net > 0 ? `Owes ₹${net.toFixed(2)}` : `Receives ₹${Math.abs(net).toFixed(2)}`;
+
+                summaryHTML += `
+                    <tr>
+                        <td><strong>${p.name}</strong></td>
+                        <td>${daysPresent[p.name]} / 31 days</td>
+                        <td>₹${share.toFixed(2)}</td>
+                        <td>₹${p.paid.toFixed(2)}</td>
+                        <td class="${cls}">${status}</td>
+                    </tr>
+                `;
+            });
+
+            document.getElementById('summaryTable').innerHTML = summaryHTML;
+            calculateTransfers(balances);
+        }
+
+        function calculateTransfers(balances) {
+            let debtors = balances.filter(b => b.net > 0.01).map(b => ({ ...b }));
+            let creditors = balances.filter(b => b.net < -0.01).map(b => ({ name: b.name, net: Math.abs(b.net) }));
+
+            let transfers = [];
+            let i = 0, j = 0;
+
+            while (i < debtors.length && j < creditors.length) {
+                let amount = Math.min(debtors[i].net, creditors[j].net);
+                transfers.push(`<strong>${debtors[i].name}</strong> pays <strong>₹${amount.toFixed(2)}</strong> to <strong>${creditors[j].name}</strong>`);
+
+                debtors[i].net -= amount;
+                creditors[j].net -= amount;
+
+                if (debtors[i].net < 0.01) i++;
+                if (creditors[j].net < 0.01) j++;
+            }
+
+            let listHTML = transfers.length > 0 ? `<ul>${transfers.map(t => `<li>${t}</li>`).join('')}</ul>` : `<p>All accounts settled!</p>`;
+            document.getElementById('transfersList').innerHTML = listHTML;
+        }
+
+        renderInputs();
+        calculate();
+    </script>
+</body>
+</html>
